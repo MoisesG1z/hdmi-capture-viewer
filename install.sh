@@ -12,6 +12,13 @@ echo ""
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
+    # Para distros basadas en Ubuntu/Debian (como Elementary)
+    if [ -z "$OS" ] || [ "$OS" = "elementary" ]; then
+        OS_LIKE=$(echo "$ID_LIKE" | cut -d' ' -f1)
+        if [ "$OS_LIKE" = "ubuntu" ] || [ "$OS_LIKE" = "debian" ]; then
+            OS="debian"
+        fi
+    fi
 else
     echo "Error: No se pudo detectar el SO"
     exit 1
@@ -43,6 +50,15 @@ case $OS in
         ;;
     *)
         echo "Distribución no soportada: $OS"
+        echo "Por favor, instala manualmente las dependencias para tu distribución."
+        echo ""
+        echo "Necesitas:"
+        echo "  - GCC/Clang compiler"
+        echo "  - CMake 3.20+"
+        echo "  - Qt6 (base y multimedia)"
+        echo "  - libv4l-dev"
+        echo "  - FFmpeg development libraries"
+        echo "  - GLM"
         exit 1
         ;;
 esac
