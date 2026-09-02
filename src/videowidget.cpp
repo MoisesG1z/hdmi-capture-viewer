@@ -1,6 +1,8 @@
 #include "videowidget.h"
 
 #include <QOpenGLShader>
+#include <QOpenGLVertexArrayObject>
+#include <QOpenGLBuffer>
 #include <iostream>
 
 // Shader para convertir YUYV a RGB
