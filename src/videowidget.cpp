@@ -1,35 +1,25 @@
 #include "videowidget.h"
 
 #include <QOpenGLShader>
-#include <QOpenGLVertexArrayObject>
-#include <QOpenGLBuffer>
 #include <iostream>
 
 // Shader para convertir YUYV a RGB
 static const char *vertexShaderSource = R"(
-    #version 330 core
-    layout(location = 0) in vec3 position;
-    layout(location = 1) in vec2 texCoord;
-    
-    out vec2 TexCoord;
-    
+    #version 120
     void main()
     {
-        gl_Position = vec4(position, 1.0);
-        TexCoord = texCoord;
+        gl_Position = gl_Vertex;
+        gl_TexCoord[0] = gl_MultiTexCoord0;
     }
 )";
 
 static const char *fragmentShaderSource = R"(
-    #version 330 core
-    in vec2 TexCoord;
-    out vec4 FragColor;
-    
+    #version 120
     uniform sampler2D texture1;
     
     void main()
     {
-        vec4 color = texture(texture1, TexCoord);
+        vec4 color = texture2D(texture1, gl_TexCoord[0].st);
         
         // Conversión YUYV a RGB
         float y = color.r;
@@ -40,7 +30,7 @@ static const char *fragmentShaderSource = R"(
         float g = y - 0.344136 * (u - 0.5) - 0.714136 * (v - 0.5);
         float b = y + 1.772 * (u - 0.5);
         
-        FragColor = vec4(r, g, b, 1.0);
+        gl_FragColor = vec4(r, g, b, 1.0);
     }
 )";
 
@@ -55,12 +45,6 @@ VideoWidget::~VideoWidget()
     makeCurrent();
     if (textureId) {
         glDeleteTextures(1, &textureId);
-    }
-    if (vao) {
-        glDeleteVertexArrays(1, &vao);
-    }
-    if (vbo) {
-        glDeleteBuffers(1, &vbo);
     }
     doneCurrent();
 }
@@ -80,43 +64,35 @@ void VideoWidget::initializeGL()
     
     setupShaders();
     
-    // Crear VAO y VBO
-    float vertices[] = {
-        -1.0f, -1.0f, 0.0f,  0.0f, 1.0f,
-         1.0f, -1.0f, 0.0f,  1.0f, 1.0f,
-        -1.0f,  1.0f, 0.0f,  0.0f, 0.0f,
-         1.0f,  1.0f, 0.0f,  1.0f, 0.0f,
-    };
-    
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(1, &vbo);
-    
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    
-    // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    
-    // TexCoord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    
     // Crear textura
     glGenTextures(1, &textureId);
     glBindTexture(GL_TEXTURE_2D, textureId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
+    // Crear textura de prueba (color negro)
+    int texWidth = 1920;
+    int texHeight = 1080;
+    unsigned char *data = new unsigned char[texWidth * texHeight * 4];
+    memset(data, 0, texWidth * texHeight * 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texWidth, texHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    delete[] data;
+    
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void VideoWidget::resizeGL(int w, int h)
 {
     glViewport(0, 0, w, h);
+    
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, w, h, 0, -1, 1);
+    
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
 }
 
 void VideoWidget::paintGL()
@@ -125,10 +101,20 @@ void VideoWidget::paintGL()
     
     if (shaderProgram) {
         shaderProgram->bind();
-        glBindVertexArray(vao);
+        
         glBindTexture(GL_TEXTURE_2D, textureId);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        glBindVertexArray(0);
+        
+        // Dibujar quad
+        glBegin(GL_QUADS);
+        {
+            glTexCoord2f(0, 0); glVertex2f(0, 0);
+            glTexCoord2f(1, 0); glVertex2f(width(), 0);
+            glTexCoord2f(1, 1); glVertex2f(width(), height());
+            glTexCoord2f(0, 1); glVertex2f(0, height());
+        }
+        glEnd();
+        
+        glBindTexture(GL_TEXTURE_2D, 0);
         shaderProgram->release();
     }
 }
